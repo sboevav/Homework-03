@@ -1,6 +1,7 @@
 # -*- mode: ruby -*-
 # vim: set ft=ruby :
-home = ENV['HOME']
+#home = ENV['HOME']
+home = "/linux/homework-03/"
 ENV["LC_ALL"] = "en_US.UTF-8"
 
 MACHINES = {
