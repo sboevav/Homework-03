@@ -1,3 +1,6 @@
+
+Выполнение основного задания
+
 ﻿1. Установка пакета xfsdump для резервного копирования файловой системы XFS
 [vagrant@lvm ~]$ sudo yum install xfsdump
 ...
@@ -617,3 +620,149 @@ sde                          8:64   0    1G  0 disk
 file1   file12  file15  file18  file20  file5  file8
 file10  file13  file16  file19  file3   file6  file9
 file11  file14  file17  file2   file4   file7  vagrant
+
+-----------------------------------------------------------
+Выполнение задания *
+
+69. Узнаем версию системы
+[root@lvm vagrant]# cat  /etc/redhat-release
+CentOS Linux release 7.5.1804 (Core) 
+
+70. Установим нужную версию репозитория zfs - 7.5
+[root@lvm vagrant]# yum install http://download.zfsonlinux.org/epel/zfs-release.el7_5.noarch.rpm
+Loaded plugins: fastestmirror
+...
+Installed:
+  zfs-release.noarch 0:1-5.el7.centos                                           
+
+Complete!
+
+71. Подправим /etc/yum.repos.d/zfs.repo - переключим zfs с DKMS на kABI
+[root@lvm vagrant]# vi /etc/yum.repos.d/zfs.repo
+
+72. Установим zfs
+[root@lvm vagrant]# yum install zfs
+Loaded plugins: fastestmirror
+...
+Installed:
+  zfs.x86_64 0:0.7.12-1.el7_5                                                   
+
+Dependency Installed:
+  kmod-spl.x86_64 0:0.7.12-1.el7_5                                              
+  kmod-zfs.x86_64 0:0.7.12-1.el7_5                                              
+  libnvpair1.x86_64 0:0.7.12-1.el7_5                                            
+  libuutil1.x86_64 0:0.7.12-1.el7_5                                             
+  libzfs2.x86_64 0:0.7.12-1.el7_5                                               
+  libzpool2.x86_64 0:0.7.12-1.el7_5                                             
+  lm_sensors-libs.x86_64 0:3.4.0-8.20160601gitf9185e5.el7                       
+  spl.x86_64 0:0.7.12-1.el7_5                                                   
+  sysstat.x86_64 0:10.1.5-18.el7                                                
+
+Complete!
+
+73. Выполним перезагрузку, затем запустим модуль zfs и убедимся, что он присутствует в системе
+[vagrant@lvm ~]$ sudo su
+[root@lvm vagrant]# modprobe zfs
+[root@lvm vagrant]# lsmod | grep zfs
+zfs                  3564468  0 
+zunicode              331170  1 zfs
+zavl                   15236  1 zfs
+icp                   270148  1 zfs
+zcommon                73440  1 zfs
+znvpair                89131  2 zfs,zcommon
+spl                   102412  4 icp,zfs,zcommon,znvpair
+
+74. Проверим наличие дисков
+[root@lvm vagrant]# lsblk
+NAME                    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sda                       8:0    0   40G  0 disk 
+├─sda1                    8:1    0    1M  0 part 
+├─sda2                    8:2    0    1G  0 part /boot
+└─sda3                    8:3    0   39G  0 part 
+  ├─VolGroup00-LogVol00 253:0    0 37.5G  0 lvm  /
+  └─VolGroup00-LogVol01 253:1    0  1.5G  0 lvm  [SWAP]
+sdb                       8:16   0   10G  0 disk 
+sdc                       8:32   0    2G  0 disk 
+sdd                       8:48   0    1G  0 disk 
+sde                       8:64   0    1G  0 disk 
+
+75. Создадим пул zfs_pool из двух дисков и диском /dev/sdd в качестве кэша
+[root@lvm opt]# zpool create zfs_pool /dev/sdb /dev/sdc cache /dev/sdd
+
+76. Создадим раздел /home в пуле zfs_pool
+[root@lvm opt]# zfs create zfs_pool/home
+
+77. Создадим раздел /opt в пуле zfs_pool
+[root@lvm opt]# zfs create zfs_pool/opt
+
+78. Ограничим в 1ГБ размер раздела zfs_pool/opt 
+[root@lvm opt]# zfs set reservation=1G zfs_pool/opt
+
+79. Проверим статус пула zfs_pool и наличие кэша
+[root@lvm opt]# zpool status zfs_pool
+  pool: zfs_pool
+ state: ONLINE
+  scan: none requested
+config:
+
+	NAME        STATE     READ WRITE CKSUM
+	zfs_pool    ONLINE       0     0     0
+	  sdb       ONLINE       0     0     0
+	  sdc       ONLINE       0     0     0
+	cache
+	  sdd       ONLINE       0     0     0
+
+errors: No known data errors
+
+80. Проверим монтирование разделов пула zfs_pool
+[root@lvm opt]# mount | grep zfs_pool
+zfs_pool on /zfs_pool type zfs (rw,seclabel,xattr,noacl)
+zfs_pool/home on /zfs_pool/home type zfs (rw,seclabel,xattr,noacl)
+zfs_pool/opt on /zfs_pool/opt type zfs (rw,seclabel,xattr,noacl)
+
+81. Дадим права пользователю на созданные разделы пула
+[root@lvm opt]# chown -R vagrant:users /zfs_pool/*
+
+82. Выполним перемонтирование zfs_pool/opt на /opt
+[root@lvm opt]# zfs set mountpoint=/opt zfs_pool/opt
+
+83. Проверим монтирование раздела zfs_pool/opt
+[root@lvm opt]#  mount | grep /opt
+zfs_pool/opt on /opt type zfs (rw,seclabel,xattr,noacl)
+
+84. Создадим тестовые 20 файлов в /opt
+[root@lvm opt]#  touch /opt/file{1..20}
+
+85. Проверим наличие созданных файлов
+[root@lvm opt]# ls
+file1   file11  file13  file15  file17  file19  file20  file4  file6  file8
+file10  file12  file14  file16  file18  file2   file3   file5  file7  file9
+
+86. Создадим снэпшот version1 для раздела zfs_pool/opt
+[root@lvm opt]# zfs snapshot zfs_pool/opt@version1
+
+87. Проверим исходное состояние снэпшота
+[root@lvm opt]# zfs list -t snapshot
+NAME                    USED  AVAIL  REFER  MOUNTPOINT
+zfs_pool/opt@version1     0B      -    40K  -
+
+88. Удалим первые 10 файлов
+[root@lvm opt]# rm -f /opt/file{1..10}
+
+89. Проверим удаление
+[root@lvm opt]# ls
+file11  file12  file13  file14  file15  file16  file17  file18  file19  file20
+
+90. Проверим состояние снэпшота, убедимся что оно изменилось после удаления файлов
+[root@lvm opt]# zfs list -t snapshot
+NAME                    USED  AVAIL  REFER  MOUNTPOINT
+zfs_pool/opt@version1    24K      -    40K  -
+
+91. Выполним восстановление раздела из снэпшота
+[root@lvm opt]# zfs rollback zfs_pool/opt@version1
+
+92. Убедимся в востановлении удаленных файлов
+[root@lvm opt]# ls
+file1   file11  file13  file15  file17  file19  file20  file4  file6  file8
+file10  file12  file14  file16  file18  file2   file3   file5  file7  file9
+
